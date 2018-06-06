@@ -1,0 +1,340 @@
+#include<windows.h>
+#include<stdio.h>
+#include<stdlib.h>
+#include<string.h>
+#include<time.h>
+typedef  unsigned short  int_16;
+/**函数声明**/
+void  InitGame(void); 					//初始化游戏 
+void  StartGame(void);					//开始游戏 
+void  SetMap(void);						//设置游戏地图 
+void  GameCtrl(void);					//游戏控制 
+void  LineErase(void);					//判断是否消行
+void  PrintLine(void);					//逐行扫描并打印 
+void  PauseGame(void);					//暂停游戏 
+void  OverGame(void);					//结束游戏 
+void  RandomCube(int i);				//随机方块
+void  Color(int i);						//设置颜色
+void  GameDead(void);					//判断游戏死亡 
+void  Gotoxy(int x,int y);         		 //全角模式下定位
+void  CubePos(int x,int y,int_16 cd); 	//方块定位 
+void  PrintNextCube(int x,int y,int_16 nextcd);	//打印输出下一方块  
+int   CubeCtrl(int k);					//方块控制 
+int   HitCheck(void);			   		//碰撞检测 
+/*****全局变量******/ 
+typedef  struct CUBE				//存放方块的数据 
+{
+	int x;
+	int y;
+	int a;
+	int b;
+}strcube;
+int score;
+strcube  cubedata[3];				//当前方块和下个方块以及备份方块的数据 
+HANDLE  H_out;						//标准输入输出句柄 
+static const int_16 cube[7][4]={
+{0x4444,0x000f,0x4444,0x000f},       //I型 
+{0x0226,0x0047,0x0644,0x00e2},		//J型
+{0x0446,0x0074,0x0622,0x002e},		//L型
+{0x0066,0x0066,0x0066,0x0066},		//O型
+{0x006c,0x0462,0x006c,0x0462},		//S型
+{0x00c6,0x0264,0x00c6,0x0264},		//Z型
+{0x00e4,0x04c4,0x004e,0x0464}};		//T型
+int_16  lineinfo[25]={0};			//行信息，0~3行不打印，方块的初始位置  
+int_16  cubeinfo[25]={0};			//方块信息
+int_16  cubeback[25]={0};			//方块信息备份 
+void main(void)
+{
+	InitGame();
+	StartGame();						
+}
+void  InitGame(void)
+{
+	SetConsoleTitle("Tetris俄罗斯方块   made by:简途"); 
+	system("mode con cols=68 lines=30");		//暂时设置的窗口大小 
+	H_out=GetStdHandle(STD_OUTPUT_HANDLE);		//获取句柄 
+	CONSOLE_CURSOR_INFO  hcursor={1,0};			//更改光标信息 
+	SetConsoleCursorInfo(H_out,&hcursor);		//隐藏光标 	
+ } 
+void  StartGame(void)
+ {
+	score=0;
+	int i;
+	for(i=4;i<24;i++)
+ 	{
+ 		lineinfo[i]=0xe007;				//取值0xe007，所以游戏池宽度为10，可以更改。 
+	 }
+	 lineinfo[24]=0xffff;
+	srand((unsigned)time(NULL));
+	RandomCube(0);
+	RandomCube(1);
+	cubedata[0].x=6;					//x初值必须大于3 
+	cubedata[0].y=0;
+	cubedata[1].x=6;
+	cubedata[1].y=0;
+	memcpy(&cubedata[2],&cubedata[0],sizeof(cubedata[0]));
+	SetMap();
+	GameCtrl();
+ }
+ void  SetMap(void)
+ {
+ 	system("cls");
+ 	Gotoxy(2,4);
+ 	printf("左移：←");
+    Gotoxy(2,7);
+    printf("右移：→");
+    Gotoxy(2,10);
+    printf("快下：↓");
+    Gotoxy(2,13);
+    printf("旋转：↑");
+    Gotoxy(2,16);
+    printf("开始：Enter");
+    Gotoxy(2,19);
+    printf("暂停：Space");
+    Gotoxy(2,22);
+    printf("退出：Esc");
+	Gotoxy(25,11);
+	printf("分数:");	
+	Gotoxy(24,22);
+	Color(11);
+	printf("★作者:简途★");
+	Gotoxy(10,2);
+	Color(11);
+	printf("★★★★ TETRIS ★★★★");
+	Color(7);
+	int i;
+	for(i=4;i<24;i++)
+	{
+		Gotoxy(10,i);
+		printf("□");
+		Gotoxy(21,i);
+		printf("□");	
+	}
+	for(i=10;i<22;i++)
+	{
+		Gotoxy(i,24);
+		printf("□");
+	}
+	Gotoxy(25,4);
+ 	printf("下个方块");
+	PrintNextCube(25,5,cube[cubedata[1].a][cubedata[1].b]);	
+ } 
+void  PrintNextCube(int x,int y,int_16 nextcd)  
+{   
+	int i,j;
+	int_16 k=0x8000;
+	Color(11);
+	for(i=0;i<4;i++)
+	{
+		Gotoxy(x,y);
+		for(j=0;j<4;j++)
+		{		
+			if(nextcd&k)				
+			printf("■");			
+			else					
+			printf("%2c",32);					
+			k>>=1;			
+		}
+		y++;		
+	}
+	Color(7);	
+} 
+void  GameCtrl(void)
+ {
+ 	int key;
+ 	clock_t   beforeclock , nowclock;
+ 	beforeclock=clock();
+ 	while(1)
+ 	{ 
+ 		nowclock=clock();
+		while(kbhit())
+		{  
+			key=getch();			
+ 			switch (key) 
+ 			{ 
+    			case 72:  									// 上
+        			cubedata[0].b=(cubedata[0].b+1)%4;  //旋转	 
+					CubeCtrl(0); 
+   				break;
+    			case 75:  									// 左
+					cubedata[0].x-=1;
+					CubeCtrl(0); 	
+    			break;
+    			case 77:  									// 右
+        			cubedata[0].x+=1;
+					CubeCtrl(0); 
+       			break;
+    			case 80: 									 // 下 	
+		    		do  {
+			 				cubedata[0].y+=1;				//直接落地			 				
+		    			}while(CubeCtrl(1));	
+       			break;
+       			case 32: PauseGame();
+				break; 
+				case 27: OverGame();
+				default:  break;
+			}	
+		}
+ 		if ((nowclock-beforeclock)>0.4*(CLOCKS_PER_SEC))
+		{ 
+			beforeclock=clock();
+			cubedata[0].y+=1;
+			CubeCtrl(1);				
+		}
+	}
+ }
+ int  CubeCtrl(int k)
+ {
+ 	CubePos(cubedata[0].x,cubedata[0].y,cube[cubedata[0].a][cubedata[0].b]);
+	if(HitCheck())
+	{
+		memcpy(&cubedata[2],&cubedata[0],sizeof(cubedata[0]));
+		PrintLine();
+		return 1;	
+	}	
+	else
+	{
+		memcpy(cubeinfo,cubeback,sizeof(cubeback));	
+		memcpy(&cubedata[0],&cubedata[2],sizeof(cubedata[2])); 
+		if(k)
+		{
+			LineErase();
+		}	
+		return 0;	
+	}	
+ }
+void  CubePos(int x,int y,int_16 cd)  
+{   
+	memcpy(cubeback,cubeinfo,sizeof(cubeinfo));
+	memset(cubeinfo,0,sizeof(cubeinfo));
+	cubeinfo[y]=((cd&0xf000))>>x;        		//当x赋初值时必须考虑这里 
+	cubeinfo[y+1]=((cd&0x0f00)<<4)>>x;
+	cubeinfo[y+2]=((cd&0x00f0)<<8)>>x;
+	cubeinfo[y+3]=((cd&0x000f)<<12)>>x;
+} 
+void  RandomCube(int i)
+ {
+ 	cubedata[i].a=rand()%7;
+ 	cubedata[i].b=rand()%4;
+ } 
+void GameDead(void) 
+ {
+ 	int i,count=0;
+	for(i=4;i<24;i++)
+	{ 
+		if((lineinfo[i])!=0xe007)
+		{
+			count++	;
+		}																	
+	}
+	if(count==20)
+		OverGame();
+ } 
+void PrintLine(void)
+{
+	int i,j;
+	int_16  k;
+	Color(11);
+	for(i=4;i<24;i++)
+	{
+		k=0x1000;
+		for(j=0;j<10;j++)
+		{   
+			Gotoxy(11+j,i);
+			if((lineinfo[i]&k)||(cubeinfo[i]&k))				
+				printf("■");			
+			else					
+				printf("%2c",32);					
+			k>>=1;		
+		}	
+	}
+	Color(7);	
+} 
+void  LineErase(void)
+ {
+ 	int k,j,t=0;
+ 	for(k=5;k<24;k++)
+ 	{
+ 		if(lineinfo[k]+cubeinfo[k]==0xffff)
+		{
+			int i;
+			for(i=k;i>4;i--)
+			{
+				lineinfo[i]=lineinfo[i-1];
+				cubeinfo[i]=cubeinfo[i-1];
+			}
+			score+=10; 			//消一行加10分 
+			t=1; 		
+		}	
+	 }
+	PrintLine(); 
+	Gotoxy(28,11);
+	Color(11);
+	printf("%3d",score);
+	Color(7);
+	for(j=4;j<24;j++)			//方块无法下落了，更新行信息 
+	{
+		lineinfo[j]+=cubeinfo[j];
+	} 
+	if(lineinfo[4]!=0xe007)			//判断方块是否到顶 
+	{
+		GameDead();
+	}
+	memcpy(&cubedata[0],&cubedata[1],sizeof(cubedata[0]));	//下一方块变成当前方块 
+	RandomCube(1);  	//随机下一个方块 
+	PrintNextCube(25,5,cube[cubedata[1].a][cubedata[1].b]);
+ }
+int HitCheck(void)
+{
+	int i,j;
+	for (i=0;i<25;i++)
+	{				
+		if(cubeinfo[i]&lineinfo[i])
+		{		
+			return 0;
+		} 			
+	}
+	return 1;	
+}
+void  Gotoxy(int x,int y)
+{
+	static COORD pos;
+	pos.X=(short)(x<<1);
+	pos.Y=y;
+	SetConsoleCursorPosition(H_out,pos);
+}
+void  Color(int i)
+{
+	SetConsoleTextAttribute(H_out,i);	
+}
+void PauseGame(void)
+{
+	while(1)
+	{
+		Sleep(400);
+		if(GetAsyncKeyState(VK_RETURN))
+			break ;
+		if(GetAsyncKeyState(VK_ESCAPE))
+			OverGame();
+	}	
+}
+void  OverGame(void)
+{
+	Gotoxy(14,12);
+	Color(14);
+	printf("Game Over");
+	Gotoxy(13,15);
+	printf("Y:重玩 N:退出");
+	Color(7);
+	Gotoxy(0,25);
+	while(1)
+ 	{
+ 		Sleep(400);
+ 		if(GetAsyncKeyState(0x4E))		//N键 
+ 			exit (0);
+ 		else if(GetAsyncKeyState(0x59)) 	//Y键 
+ 			break;	    
+	}
+	StartGame();	
+} 
+
